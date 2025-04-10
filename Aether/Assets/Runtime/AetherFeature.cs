@@ -1,9 +1,11 @@
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
+using Aether.Passes;
 using static Aether.AetherSizeHelpers;
 
 namespace Aether
 {
+
     public class AetherFeature : ScriptableRendererFeature
     {
         [SerializeField] AetherFogPassSettings settings = new();
@@ -13,18 +15,28 @@ namespace Aether
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
+            // If the passes are null (for example, because the scene was loaded additively from a Boot scene),
+            // reinitialize them.
+            if (shadowPass == null || fogPass == null)
+            {
+                Create();
+            }
+
             renderer.EnqueuePass(shadowPass);
             renderer.EnqueuePass(fogPass);
         }
 
+
+
+
         public override void Create()
         {
-            shadowPass = new()
+            shadowPass = new AetherShadowPass()
             {
                 renderPassEvent = RenderPassEvent.AfterRenderingShadows
             };
 
-            fogPass = new(settings)
+            fogPass = new AetherFogPass(settings)
             {
                 renderPassEvent = RenderPassEvent.BeforeRenderingPostProcessing
             };
@@ -62,10 +74,10 @@ namespace Aether
             Light light = aetherLight.Light;
             
             Matrix4x4 v = aetherLight.transform.worldToLocalMatrix;
-			Matrix4x4 p = GL.GetGPUProjectionMatrix(Matrix4x4.Perspective(light.spotAngle, 1.0f, light.shadowNearPlane, light.range), true);
+            Matrix4x4 p = GL.GetGPUProjectionMatrix(Matrix4x4.Perspective(light.spotAngle, 1.0f, light.shadowNearPlane, light.range), true);
 
-			p *= Matrix4x4.Scale(new Vector3(1.0f, 1.0f, -1.0f));
-			mat = p * v;
+            p *= Matrix4x4.Scale(new Vector3(1.0f, 1.0f, -1.0f));
+            mat = p * v;
 
             position = aetherLight.transform.position;
             direction = aetherLight.transform.forward;
@@ -91,9 +103,9 @@ namespace Aether
         public void Update (AetherFog volume)
         {
             trs = Matrix4x4.TRS(volume.transform.position, volume.transform.rotation, volume.transform.localScale);
-            minimum = volume.transform.position - (volume.transform.localScale/2);
-            maximum = volume.transform.position + (volume.transform.localScale/2);
-            color = new(volume.Color.r, volume.Color.g, volume.Color.b);
+            minimum = volume.transform.position - (volume.transform.localScale / 2f);
+            maximum = volume.transform.position + (volume.transform.localScale / 2f);
+            color = new Vector3(volume.Color.r, volume.Color.g, volume.Color.b);
             density = volume.Density;
             scatterCoefficient = volume.ScatterCoefficient;
             type = (int)volume.Type;
@@ -121,4 +133,5 @@ namespace Aether
             far = viewDistance;
         }
     }
+
 }
