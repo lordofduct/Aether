@@ -6,7 +6,7 @@ Aether provides atmospheric volumetric fog and lighting effects to the Unity Uni
 
 This project allows developers to easily create immersive and realistic atmospheric conditions in their games, such as fog, mist, and haze, which can significantly enhance the overall aesthetic of a scene.
 
-#Fork Notes (lordofduct)
+# Fork Notes (lordofduct)
 
 This fork exists to cleanup some issues with the original version and add a scaling proximity node system for tweaking the 'global' fog settings to the specifications of my partner.
 
