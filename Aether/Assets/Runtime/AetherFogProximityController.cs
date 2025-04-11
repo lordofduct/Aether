@@ -2,9 +2,10 @@ using UnityEngine;
 
 namespace Aether
 {
-    public class GlobalFogManager : MonoBehaviour
+
+    [RequireComponent(typeof(AetherFog))]
+    public class AetherFogProximityController : MonoBehaviour
     {
-        public static GlobalFogManager Instance;
 
         // Current fog parameters applied to this GameObject.
         public Color CurrentFogColor;
@@ -25,10 +26,8 @@ namespace Aether
 
         void Awake()
         {
-            Instance = this;
             fogComponent = GetComponent<AetherFog>();
-
-            if (fogComponent == null || (fogComponent.Type != AetherFog.FogType.Global && fogComponent.Type != AetherFog.FogType.Sample))
+            if (fogComponent == null || (fogComponent.Type != AetherFog.FogType.Global))
             {
                 Debug.LogError("GlobalFogManager requires an AetherFog component of type Global or Sample on the same GameObject!");
                 return;
@@ -47,6 +46,61 @@ namespace Aether
             CurrentUnityFogDensity = DefaultUnityFogDensity;
         }
 
+        void Update()
+        {
+            var targ = AetherFogProximityTarget.Active;
+            if (!targ) return;
+
+            Vector3 playerPos = targ.transform.position;
+            float cumulativeBlend = 0f;
+            Color blendedColor = Color.clear;
+            float blendedAetherDensity = 0f;
+            float blendedScatter = 0f;
+            float blendedUnityDensity = 0f;
+
+            foreach (var fog in AetherFogProximityNode.Pool)
+            {
+                float blend = fog.GetBlendFactor(playerPos);
+                if (blend > 0f)
+                {
+                    // Compute facing factor based on the dot product between the fog's forward and player's forward.
+                    float dot = Vector3.Dot(fog.transform.forward, targ.transform.forward);
+                    float facingFactor = (dot + 1f) / 2f; // remap from [-1, 1] to [0, 1]
+                    Color effectiveColor = Color.Lerp(fog.SecondaryColor, fog.Color, facingFactor);
+
+                    blendedColor += effectiveColor * blend;
+                    blendedAetherDensity += fog.Density * blend;
+                    blendedScatter += fog.ScatterCoefficient * blend;
+                    blendedUnityDensity += fog.UnityDensity * blend;
+                    cumulativeBlend += blend;
+                }
+            }
+
+            Color targetColor;
+            float targetAetherDensity;
+            float targetScatter;
+            float targetUnityFogDensity;
+
+            if (cumulativeBlend > 0f)
+            {
+                targetColor = blendedColor / cumulativeBlend;      // Averaged color.
+                targetAetherDensity = blendedAetherDensity;          // Keep the reduced density.
+                targetScatter = blendedScatter / cumulativeBlend;    // Averaged scatter.
+                targetUnityFogDensity = blendedUnityDensity / cumulativeBlend; // Averaged Unity fog density.
+            }
+            else
+            {
+                // Revert to defaults.
+                targetColor = this.DefaultFogColor;
+                targetAetherDensity = this.DefaultAetherFogDensity;
+                targetScatter = this.DefaultScatterCoefficient;
+                targetUnityFogDensity = this.DefaultUnityFogDensity;
+            }
+
+            // Smoothly blend the current global fog settings toward the targets
+            this.FadeToFog(targetColor, targetAetherDensity, targetScatter, targ.fadeSpeed * Time.deltaTime, targetUnityFogDensity);
+        }
+
         /// <summary>
         /// Smoothly blends the current fog parameters toward the target values.
         /// The targets passed in should already reflect any reduction from sample fog volumes.
@@ -58,7 +112,7 @@ namespace Aether
         /// <param name="targetScatter">Target scatter coefficient.</param>
         /// <param name="t">Blend factor (typically between 0 and 1).</param>
         /// <param name="targetUnityFogDensity">Target Unity fog density.</param>
-        public void FadeToFog(Color targetColor, float targetAetherDensity, float targetScatter, float t, float targetUnityFogDensity)
+        void FadeToFog(Color targetColor, float targetAetherDensity, float targetScatter, float t, float targetUnityFogDensity)
         {
             CurrentFogColor = Color.Lerp(CurrentFogColor, targetColor, t);
             CurrentAetherFogDensity = Mathf.Lerp(CurrentAetherFogDensity, targetAetherDensity, t);
@@ -71,5 +125,7 @@ namespace Aether
             fogComponent.ScatterCoefficient = CurrentScatterCoefficient;
             RenderSettings.fogDensity = CurrentUnityFogDensity;
         }
+
     }
+
 }
